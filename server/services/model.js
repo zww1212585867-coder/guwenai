@@ -1,5 +1,5 @@
-// 模型调用层：DeepSeek / Qwen / OpenAI 兼容接口
-// 无 API Key 时返回按状态区分的离线 stub，保证整链可本地演示
+// 模型调用层：Gemini（免费，主） / DeepSeek（付费，兜底）/ OpenAI 兼容接口
+// 主模型报错或限速 → 自动切兜底；两个 Key 都没配时返回离线 stub
 function buildMessages(systemPrompt, history, userMessage) {
   const msgs = [{ role: 'system', content: systemPrompt }];
   for (const m of history || []) msgs.push({ role: m.role, content: m.content });
@@ -7,21 +7,19 @@ function buildMessages(systemPrompt, history, userMessage) {
   return msgs;
 }
 
-async function chat(cfg, messages, opts = {}) {
-  const key = cfg.model && cfg.model.apiKey;
-  if (!key) return stubResponse(messages, opts.mode || 'diagnose');
-
+// 单次模型调用（主模型 / 兜底模型共用）
+async function callOnce(modelCfg, messages, opts) {
   const body = {
-    model: cfg.model.model,
+    model: modelCfg.model,
     messages,
-    temperature: cfg.model.temperature ?? 0.7,
-    max_tokens: opts.maxTokens ?? cfg.model.maxTokens ?? 2000,
+    temperature: modelCfg.temperature ?? 0.7,
+    max_tokens: opts.maxTokens ?? modelCfg.maxTokens ?? 2000,
   };
   if (opts.json) body.response_format = { type: 'json_object' };
 
-  const res = await fetch(`${cfg.model.baseUrl}/chat/completions`, {
+  const res = await fetch(`${modelCfg.baseUrl}/chat/completions`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${modelCfg.apiKey}` },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`Model API ${res.status}: ${await res.text()}`);
@@ -30,7 +28,34 @@ async function chat(cfg, messages, opts = {}) {
   return {
     content: data.choices[0].message.content,
     tokenCost: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0),
+    provider: modelCfg.provider,
   };
+}
+
+// 主模型失败（报错 / 限速 429 等）→ 自动切兜底
+// 用户策略：先用免费 Gemini，失败再上付费 DeepSeek（兜底）
+async function chat(cfg, messages, opts = {}) {
+  const primary = cfg.model;
+  const fallback = cfg.model && cfg.model.fallback;
+  const primaryKey = primary && primary.apiKey;
+  const fallbackKey = fallback && fallback.apiKey;
+
+  // 两个 Key 都没配 → 离线 stub（保证本地可演示）
+  if (!primaryKey && !fallbackKey) return stubResponse(messages, opts.mode || 'diagnose');
+
+  // 主模型有 Key → 先试主模型
+  if (primaryKey) {
+    try {
+      return await callOnce(primary, messages, opts);
+    } catch (e) {
+      console.warn(`[model] 主模型(${primary.provider || 'primary'})失败，尝试兜底:`, e.message);
+      if (fallbackKey) return await callOnce(fallback, messages, opts);
+      throw e; // 无兜底可切，向上抛
+    }
+  }
+
+  // 主模型无 Key 但有兜底 Key → 直接走兜底（不浪费一次主模型请求）
+  return await callOnce(fallback, messages, opts);
 }
 
 // ---------- 离线 stub ----------

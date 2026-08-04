@@ -1,13 +1,21 @@
 server:
   port: 3000
 
+# 模型策略：先用免费 Gemini；报错 / 限速(429) 自动切付费 DeepSeek（兜底）
 model:
-  provider: deepseek          # deepseek / qwen / openai
-  apiKey: ${DEEPSEEK_API_KEY} # 从环境变量读取，不要写死
-  baseUrl: https://api.deepseek.com/v1
-  model: deepseek-chat
+  provider: gemini            # 主模型：免费
+  apiKey: ${GEMINI_API_KEY}  # 从环境变量读取，不要写死
+  baseUrl: https://generativelanguage.googleapis.com/v1beta/openai
+  model: gemini-2.0-flash
   temperature: 0.7
   maxTokens: 2000
+  fallback:                   # 兜底：付费，仅当 Gemini 失败时才用
+    provider: deepseek
+    apiKey: ${DEEPSEEK_API_KEY}
+    baseUrl: https://api.deepseek.com/v1
+    model: deepseek-chat
+    temperature: 0.7
+    maxTokens: 2000
 
 # ===== 诊断参数（后台随时可调，不改代码不改 Prompt）=====
 diagnosis:
