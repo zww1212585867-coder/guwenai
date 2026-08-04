@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>认知导航器 · Cognitive Navigator</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">认知导航器 <span class="sub">COS v1.0</span></div>
+    <div id="domainChips" class="chips"></div>
+  </header>
+
+  <main class="stage">
+    <div id="log" class="log"></div>
+
+    <div id="planActions" class="plan-actions hidden">
+      <button id="btnPlan" class="primary">📋 生成路线图</button>
+      <button id="btnExecute" class="primary hidden">▶ 开始执行</button>
+      <button id="btnFinish" class="ghost">✓ 完成导航</button>
+    </div>
+
+    <div id="feedbackBox" class="feedback hidden">
+      <span>这次导航有用吗？</span>
+      <span id="stars" class="stars">
+        <span data-score="1">★</span><span data-score="2">★</span><span data-score="3">★</span>
+        <span data-score="4">★</span><span data-score="5">★</span>
+      </span>
+    </div>
+  </main>
+
+  <footer class="composer">
+    <textarea id="input" rows="2" placeholder="描述你想完成的任务，或卡住的那一步…"></textarea>
+    <button id="btnSend" class="primary">发送</button>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

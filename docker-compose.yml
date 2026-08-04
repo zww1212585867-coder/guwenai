@@ -1,0 +1,12 @@
+services:
+  navigator:
+    build: .
+    container_name: cognitive-navigator
+    ports:
+      - "3000:3000"
+    environment:
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - PORT=3000
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

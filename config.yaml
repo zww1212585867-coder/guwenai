@@ -1,0 +1,36 @@
+server:
+  port: 3000
+
+model:
+  provider: deepseek          # deepseek / qwen / openai
+  apiKey: ${DEEPSEEK_API_KEY} # 从环境变量读取，不要写死
+  baseUrl: https://api.deepseek.com/v1
+  model: deepseek-chat
+  temperature: 0.7
+  maxTokens: 2000
+
+# ===== 诊断参数（后台随时可调，不改代码不改 Prompt）=====
+diagnosis:
+  sufficiency_threshold: 70   # >= 该值立即停止提问进入规划（张维维 2026-08-04 拍板）
+  max_questions_per_round: 6  # 单轮最多问几个（前期放宽，有数据后再压）
+  max_rounds: 2               # 最多追问几轮，到顶强制出方案
+  task_type_candidates: 30    # 注入 prompt 的历史高频 task_type 数量
+
+prompt:
+  bundleVersion: cos-v1.0     # 一个号覆盖 cos/_output/diagnose/plan/execute 全套
+  activeVersion: v1
+
+protocol:
+  activeVersion: v1
+
+cache:
+  topicTtlHours: 24           # 话题骨架缓存有效期
+
+events:
+  enabled: true
+
+outcome:
+  abandon_hours: 24           # 超过该时长无活动 → 查询时判定为放弃（不落列）
+
+logging:
+  level: info
