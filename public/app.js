@@ -32,10 +32,26 @@ function addMsg(role, node) {
 
 // ---------- API ----------
 async function nav(body) {
-  const r = await fetch(API + '/api/navigation', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-  });
-  return r.json();
+  let r;
+  try {
+    r = await fetch(API + '/api/navigation', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+  } catch (e) {
+    throw new Error('无法连接服务器（' + (e.message || e) + '）— 请检查 VPS 上 node 服务是否在跑');
+  }
+  const ct = r.headers.get('content-type') || '';
+  const raw = await r.text();
+  if (!r.ok) {
+    // nginx 通常会回 HTML 404/502，把状态码 + 前 80 字符贴出来
+    throw new Error(`服务器返回 ${r.status}：${raw.slice(0, 120)}`);
+  }
+  if (!ct.includes('json')) {
+    throw new Error(`服务器返回的不是 JSON（可能是 nginx 404 页面）。前 80 字符：${raw.slice(0, 120)}`);
+  }
+  try { return JSON.parse(raw); } catch (e) {
+    throw new Error('JSON 解析失败：' + (e.message || e) + ' · 原文：' + raw.slice(0, 120));
+  }
 }
 
 // ---------- 渲染：诊断态 ----------
@@ -159,12 +175,18 @@ async function send() {
 
   const answersArr = Object.entries(state.answers).map(([qkey, v]) => ({ qkey, ...v }));
   const body = { visitor_id: state.visitorId, conversation_id: state.conversationId, message: text, answers: answersArr };
-  const res = await nav(body);
-  state.conversationId = res.conversation_id;
-  state.mode = res.mode;
-  if (res.mode === 'diagnose') renderDiagnose(res.output);
-  else if (res.mode === 'plan') renderPlan(res.output);
-  else if (res.mode === 'execute') renderExecute(res.output);
+  try {
+    const res = await nav(body);
+    state.conversationId = res.conversation_id;
+    state.mode = res.mode;
+    if (res.mode === 'diagnose') renderDiagnose(res.output);
+    else if (res.mode === 'plan') renderPlan(res.output);
+    else if (res.mode === 'execute') renderExecute(res.output);
+  } catch (e) {
+    const err = el('div', 'err', '⚠️ ' + (e.message || e));
+    addMsg('ai', err);
+    console.error('[navigation]', e);
+  }
 }
 
 async function doPlan() {
@@ -198,9 +220,11 @@ async function sendFeedback(score) {
 // ---------- 启动 ----------
 async function init() {
   await fetch(API + '/api/visitor', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ visitor_id: state.visitorId, consent_version: 'v1' }) });
-  const d = await (await fetch(API + '/api/domains')).json();
-  $('#domainChips').innerHTML = d.map(x => `<span class="chip">${x.label}</span>`).join('');
+    body: JSON.stringify({ visitor_id: state.visitorId, consent_version: 'v1' }) }).catch(() => {});
+  try {
+    const d = await (await fetch(API + '/api/domains')).json();
+    if (Array.isArray(d)) $('#domainChips').innerHTML = d.map(x => `<span class="chip">${x.label}</span>`).join('');
+  } catch (e) { /* 字典暂时不可用不阻塞 */ }
 
   $('#btnSend').onclick = send;
   $('#input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
@@ -208,6 +232,15 @@ async function init() {
   $('#btnExecute').onclick = doExecute;
   $('#btnFinish').onclick = doFinish;
   document.querySelectorAll('#stars span').forEach(s => { s.onclick = () => sendFeedback(Number(s.dataset.score)); });
+
+  // Hero 示例点击 → 自动填进输入框 → 触发发送
+  document.querySelectorAll('.hero .example').forEach(b => {
+    b.onclick = () => {
+      $('#input').value = b.textContent.trim();
+      $('#input').focus();
+      send();
+    };
+  });
 
   addMsg('ai', el('div', '', '你好，我是你的认知导航员。说说你想完成的事——我不会急着给方案，先把关键问题问清楚。'));
 }
