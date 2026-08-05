@@ -20,6 +20,9 @@ APP_DIR="$(dirname "$SCRIPT_DIR")"
 BRANCH="main"
 LOG_PREFIX="[$(date '+%F %T')]"
 
+# 强制把 npm 全局 bin（pm2 所在）加进 PATH，避免 cron 环境里 pm2 找不到
+export PATH="/root/.nvm/versions/node/v20.20.2/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+
 cd "$APP_DIR"
 
 # 1) 拉取
