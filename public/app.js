@@ -10,6 +10,7 @@ const state = {
   pendingQuestions: [],
   answers: {},              // qkey -> { answer, skipped, assumption }
   confirmMode: false,       // 理解确认"不对"后等待用户解释
+  missContext: null,        // 理解确认点✗时暂存"原理解"，发出解释后回传后端
 };
 localStorage.setItem('cn_visitor', state.visitorId);
 
@@ -73,10 +74,11 @@ function renderDiagnose(out) {
       card.appendChild(el('div', 'confirm-needs', '大模型还需要：' + pr.gpt_needs.join('、')));
     const opts = el('div', 'options');
     const yes = el('span', 'opt', '✓ 对，就是这个');
-    yes.onclick = () => { state.confirmMode = false; doPlan(); };
+    yes.onclick = () => { state.confirmMode = false; doPlan({ confirmed: true, original: pr.understood_as }); };
     const no = el('span', 'opt', '✗ 不对，我解释一下');
     no.onclick = () => {
       state.confirmMode = true;
+      state.missContext = { original: pr.understood_as };
       $('#input').placeholder = '请说明哪里理解错了，或补充你的真实想法…';
       $('#input').focus();
       addMsg('ai', el('div', 'classification', '好的，请告诉我哪里理解错了，我重新帮你梳理。'));
@@ -207,6 +209,10 @@ async function send() {
 
   const answersArr = Object.entries(state.answers).map(([qkey, v]) => ({ qkey, ...v }));
   const body = { visitor_id: state.visitorId, conversation_id: state.conversationId, message: text, answers: answersArr };
+  if (state.missContext) {
+    body.confirm_result = { confirmed: false, reason: text, original_understanding: state.missContext.original };
+    state.missContext = null;
+  }
   try {
     const res = await nav(body);
     state.conversationId = res.conversation_id;
@@ -221,8 +227,10 @@ async function send() {
   }
 }
 
-async function doPlan() {
-  const res = await nav({ visitor_id: state.visitorId, conversation_id: state.conversationId, action: 'plan' });
+async function doPlan(confirmResult) {
+  const body = { visitor_id: state.visitorId, conversation_id: state.conversationId, action: 'plan' };
+  if (confirmResult) body.confirm_result = { confirmed: confirmResult.confirmed, original_understanding: confirmResult.original };
+  const res = await nav(body);
   state.mode = 'plan';
   renderPlan(res.output);
 }

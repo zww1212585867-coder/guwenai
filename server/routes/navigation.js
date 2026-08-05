@@ -184,6 +184,15 @@ router.post('/', async (req, res) => {
       .run(uid(), conv.visitor_id, conv.id, 'navigation_turn',
         (output.classification && output.classification.domain) || null, JSON.stringify({ mode }), tokenCost, ts);
 
+    // 理解确认埋点（不对率指标）：✓ confirmed:true / ✗ confirmed:false + reason
+    if (body.confirm_result && typeof body.confirm_result === 'object') {
+      const cr = body.confirm_result;
+      db.prepare('INSERT INTO events (id, visitor_id, conversation_id, event_type, domain, payload, created_at) VALUES (?,?,?,?,?,?,?)')
+        .run(uid(), conv.visitor_id, conv.id, 'understanding_confirm',
+          (output.classification && output.classification.domain) || conv.domain || null,
+          JSON.stringify({ confirmed: !!cr.confirmed, reason: cr.reason || null, original_understanding: cr.original_understanding || null }), ts);
+    }
+
     // 状态分流落库
     let readyToPlan = false, sufficiency = null;
     if (mode === 'diagnose') {
