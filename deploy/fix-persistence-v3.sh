@@ -23,48 +23,13 @@ fi
 echo "[init] pm2 路径: ${PM2:-NOT-FOUND}"
 
 echo ""
-echo "[1/6] 用 heredoc 强制覆盖 deploy/auto-pull.sh（自定位 + 绝对 pm2 路径）"
-cat > /root/guwenai/deploy/auto-pull.sh <<AUTOPULL_EOF
-#!/usr/bin/env bash
-# VPS 端自动同步脚本：每 60 秒从 GitHub 拉最新代码 + pm2 重启
-set -euo pipefail
-NPM_PREFIX="\$(npm prefix -g 2>/dev/null || echo /usr/local)"
-export PATH="\$NPM_PREFIX/bin:/usr/local/bin:/usr/bin:/bin:/sbin:\$PATH"
-PM2_CMD="\$(command -v pm2 || echo \${NPM_PREFIX}/bin/pm2)"
-
-SCRIPT_DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
-APP_DIR="\$(dirname "\$SCRIPT_DIR")"
-BRANCH="main"
-LOG_PREFIX="[\$(date '+%F %T')]"
-
-cd "\$APP_DIR"
-git fetch --quiet origin
-LOCAL=\$(git rev-parse HEAD)
-REMOTE=\$(git rev-parse origin/"\$BRANCH")
-if [ "\$LOCAL" = "\$REMOTE" ]; then
-    echo "\$LOG_PREFIX no-update skip" >> /var/log/cn-autopull.log
-    exit 0
-fi
-
-echo "\$LOG_PREFIX pulling \$LOCAL -> \$REMOTE" >> /var/log/cn-autopull.log
-git reset --hard origin/"\$BRANCH" --quiet
-
-if ! git diff --quiet "\$LOCAL" "\$REMOTE" -- package.json package-lock.json 2>/dev/null; then
-    echo "\$LOG_PREFIX npm install" >> /var/log/cn-autopull.log
-    npm install --silent
-fi
-
-if "\$PM2_CMD" pid navigator >/dev/null 2>&1; then
-    "\$PM2_CMD" reload navigator --silent || "\$PM2_CMD" restart navigator --silent
-else
-    "\$PM2_CMD" start server/index.js --name navigator --silent
-    "\$PM2_CMD" save --silent
-fi
-
-echo "\$LOG_PREFIX done" >> /var/log/cn-autopull.log
-AUTOPULL_EOF
+echo "[1/6] 用 git 拉最新 deploy/auto-pull.sh（不覆盖，信任 git 版本）"
+# 修真凶：v3 的 heredoc 有 bug，每次跑会写坏 auto-pull.sh。
+# 改用 git checkout 直接拉 git 上最新版（即 aff9284 修复版），永远不会再坏。
+cd /root/guwenai
+git checkout HEAD -- deploy/auto-pull.sh
 chmod +x /root/guwenai/deploy/auto-pull.sh
-echo -e "  ${GREEN}✅ auto-pull.sh 已覆盖（自带 PATH 注入 + 绝对 pm2 路径）${NC}"
+echo -e "  ${GREEN}✅ auto-pull.sh 已恢复为 git 最新版（带 PATH 注入）${NC}"
 
 echo "[2/6] git pull 拉最新代码"
 git pull --quiet 2>&1 | tail -3
