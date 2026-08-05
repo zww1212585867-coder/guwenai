@@ -29,6 +29,7 @@ function inject(text, cfg) {
     .replace(/\{\{SUFFICIENCY_THRESHOLD\}\}/g, d.sufficiency_threshold ?? 70)
     .replace(/\{\{MAX_QUESTIONS_PER_ROUND\}\}/g, d.max_questions_per_round ?? 6)
     .replace(/\{\{MAX_ROUNDS\}\}/g, d.max_rounds ?? 2)
+    .replace(/\{\{CURRENT_ROUND\}\}/g, d._currentRound ?? 1)
     .replace(/\{\{DOMAIN_DICT\}\}/g, domainDictText())
     .replace(/\{\{TASK_TYPE_CANDIDATES\}\}/g, taskTypeCandidates(d.task_type_candidates));
 }
@@ -69,8 +70,10 @@ function stripForbidden(obj) {
 }
 
 // ---------- 主调用 ----------
-async function runMode(cfg, { mode, history, message, profile }) {
-  let sys = systemPrompt(cfg, mode);
+async function runMode(cfg, { mode, history, message, profile, round }) {
+  const cfg2 = JSON.parse(JSON.stringify(cfg));
+  if (mode === 'diagnose') cfg2.diagnosis = Object.assign({}, cfg2.diagnosis, { _currentRound: round || 1 });
+  let sys = systemPrompt(cfg2, mode);
   if (profile) sys += '\n\n---\n\n' + inject(read('continue.md'), cfg).replace('{profile}', JSON.stringify(profile));
 
   const messages = buildMessages(sys, history || [], message);

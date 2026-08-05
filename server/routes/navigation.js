@@ -163,13 +163,15 @@ router.post('/', async (req, res) => {
     // 诊断 / 规划 / 陪跑
     const history = getHistory(conv.id);
     const profile = mode !== 'plan' ? loadProfile(conv.visitor_id, conv.domain) : null;
-    const planMsg = mode === 'plan' ? '请根据已收集的信息给出完整可执行路线，不再提问。' : null;
+    const planMsg = mode === 'plan' ? '请根据已收集的信息给出完整分析包与分析，不再提问。' : null;
+    const currentRound = (conv.round_count || 0) + 1; // 本轮是第几轮诊断
 
     const { output, tokenCost } = await runMode(config, {
       mode,
       history,
       message: mode === 'plan' ? planMsg : message,
       profile: profile || undefined,
+      round: mode === 'diagnose' ? currentRound : undefined,
     });
 
     // 落库：AI 消息 + 思考快照
@@ -190,7 +192,9 @@ router.post('/', async (req, res) => {
       const cls = output.classification || {};
       outcome.setClassification(conv.id, cls.domain, cls.task_type);
       outcome.addQuestions(conv.id, Array.isArray(output.questions) ? output.questions.length : 0);
-      sufficiency = (output.sufficiency && output.sufficiency.score) ?? null;
+      // confidence 优先（v2.0），兼容旧 sufficiency.score
+      sufficiency = (typeof output.confidence === 'number') ? output.confidence
+        : (output.sufficiency && typeof output.sufficiency.score === 'number') ? output.sufficiency.score : null;
       readyToPlan = !!output.ready_to_plan && sufficiency != null && sufficiency >= THRESHOLD;
     } else if (mode === 'plan') {
       db.prepare("UPDATE conversations SET mode='execute', updated_at=? WHERE id=?").run(ts, conv.id);
