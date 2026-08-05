@@ -23,13 +23,19 @@ fi
 echo "[init] pm2 路径: ${PM2:-NOT-FOUND}"
 
 echo ""
-echo "[1/6] 用 git 拉最新 deploy/auto-pull.sh（不覆盖，信任 git 版本）"
-# 修真凶：v3 的 heredoc 有 bug，每次跑会写坏 auto-pull.sh。
-# 改用 git checkout 直接拉 git 上最新版（即 aff9284 修复版），永远不会再坏。
-cd /root/guwenai
-git checkout HEAD -- deploy/auto-pull.sh
+echo "[1/6] 强制从远端 main 拉最新 deploy/auto-pull.sh（curl 不依赖 git 状态）"
+# 修真凶：v3 的 git checkout 失败时仍打 ✅，导致错版留在 VPS。
+# 改用 curl 直拉 GitHub raw，绕过 git 状态，文件必为远端 main 最新版。
+curl -sL https://raw.githubusercontent.com/zww1212585867-coder/guwenai/main/deploy/auto-pull.sh -o /root/guwenai/deploy/auto-pull.sh
 chmod +x /root/guwenai/deploy/auto-pull.sh
-echo -e "  ${GREEN}✅ auto-pull.sh 已恢复为 git 最新版（带 PATH 注入）${NC}"
+# 验证关键行：line 24 必须是 export PATH (含 /root/.nvm)
+if grep -q '^export PATH="/root/.nvm' /root/guwenai/deploy/auto-pull.sh; then
+  echo -e "  ${GREEN}✅ auto-pull.sh 已从远端 main 拉回（带 PATH 注入）${NC}"
+else
+  echo -e "  ${RED}❌ auto-pull.sh 内容异常！请贴 cat 内容给我${NC}"
+  cat /root/guwenai/deploy/auto-pull.sh | sed -n '20,35p'
+  exit 1
+fi
 
 echo "[2/6] git pull 拉最新代码"
 git pull --quiet 2>&1 | tail -3
