@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # VPS 端自动同步脚本：每 60 秒从 GitHub 拉最新代码 + pm2 重启
 # 安装：crontab -e → 追加下面这一行
-#   * * * * * /opt/cognitive-navigator/deploy/auto-pull.sh >> /var/log/cn-autopull.log 2>&1
+#   * * * * * /root/guwenai/deploy/auto-pull.sh >> /var/log/cn-autopull.log 2>&1
 #
 # 行为：
-#   - cd 到项目根目录
+#   - cd 到脚本所在目录的上一级（项目根目录，路径无关）
 #   - git fetch + git reset --hard origin/main（无视冲突、自动追平）
 #   - npm install 仅在 package.json 变更时跑
 #   - pm2 重启 node 服务
@@ -14,8 +14,10 @@
 # 然后一分钟内 VPS 自动追上。
 
 set -euo pipefail
-APP_DIR="/opt/cognitive-navigator"   # 改成你的实际目录
-BRANCH="main"                          # 或 master
+# 自动定位脚本所在目录的上一级，避免硬编码错误路径
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_DIR="$(dirname "$SCRIPT_DIR")"
+BRANCH="main"
 LOG_PREFIX="[$(date '+%F %T')]"
 
 cd "$APP_DIR"
