@@ -11,23 +11,48 @@ cd /root/guwenai 2>/dev/null || { echo "❌ /root/guwenai 不存在"; exit 1; }
 
 GREEN='\033[0;32m'; RED='\033[0;31m'; YEL='\033[1;33m'; NC='\033[0m'
 
-echo "[1/7] 修老 auto-pull.sh 里的错误路径（如有）"
-if [ -f /root/guwenai/deploy/auto-pull.sh ]; then
-  if grep -q "/opt/cognitive-navigator" /root/guwenai/deploy/auto-pull.sh; then
-    sed -i 's|/opt/cognitive-navigator|/root/guwenai|g' /root/guwenai/deploy/auto-pull.sh
-    echo -e "  ${YEL}→ 已修：/opt/cognitive-navigator → /root/guwenai${NC}"
-  else
-    echo -e "  ${GREEN}✅ 路径已正确${NC}"
-  fi
-else
-  echo -e "  ${RED}❌ auto-pull.sh 不存在！${NC}"
+echo "[1/7] 强制抛弃 deploy/auto-pull.sh 的本地改动（避免 git pull 冲突）+ 修老路径"
+# 之前版本如果有人手改或 sed 改过，git pull 会卡住；这里强制 reset
+cd /root/guwenai
+git checkout -- deploy/auto-pull.sh 2>/dev/null || true
+# 再保险：用脚本自定位版本覆盖
+cat > /root/guwenai/deploy/auto-pull.sh <<'AUTOPULL_EOF'
+#!/usr/bin/env bash
+# VPS 端自动同步脚本：每 60 秒从 GitHub 拉最新代码 + pm2 重启
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_DIR="$(dirname "$SCRIPT_DIR")"
+BRANCH="main"
+LOG_PREFIX="[$(date '+%F %T')]"
+
+cd "$APP_DIR"
+git fetch --quiet origin
+LOCAL=$(git rev-parse HEAD)
+REMOTE=$(git rev-parse origin/"$BRANCH")
+if [ "$LOCAL" = "$REMOTE" ]; then
+    echo "$LOG_PREFIX no-update skip" >> /var/log/cn-autopull.log
+    exit 0
 fi
 
-# 也修一份在 /opt/cognitive-navigator 的（以防有遗留）
-if [ -f /opt/cognitive-navigator/deploy/auto-pull.sh ]; then
-  sed -i 's|/opt/cognitive-navigator|/root/guwenai|g' /opt/cognitive-navigator/deploy/auto-pull.sh
-  echo -e "  ${YEL}→ /opt/cognitive-navigator 的副本也修了${NC}"
+echo "$LOG_PREFIX pulling $LOCAL -> $REMOTE" >> /var/log/cn-autopull.log
+git reset --hard origin/"$BRANCH" --quiet
+
+if ! git diff --quiet "$LOCAL" "$REMOTE" -- package.json package-lock.json 2>/dev/null; then
+    echo "$LOG_PREFIX npm install" >> /var/log/cn-autopull.log
+    npm install --silent
 fi
+
+if pm2 pid navigator >/dev/null 2>&1; then
+    pm2 reload navigator --silent || pm2 restart navigator --silent
+else
+    pm2 start server/index.js --name navigator --silent
+    pm2 save --silent
+fi
+
+echo "$LOG_PREFIX done" >> /var/log/cn-autopull.log
+AUTOPULL_EOF
+chmod +x /root/guwenai/deploy/auto-pull.sh
+echo -e "  ${GREEN}✅ auto-pull.sh 已用脚本自定位版本覆盖（不会硬编码错路径）${NC}"
 
 echo "[2/7] 拉取最新代码"
 git pull --quiet 2>&1 | tail -3
