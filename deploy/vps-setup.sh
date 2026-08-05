@@ -60,11 +60,22 @@ if [ -z "$APP_DIR" ]; then
   echo "未找到项目，克隆到 /opt/cognitive-navigator ..."
   APP_DIR="/opt/cognitive-navigator"
   git clone "https://github.com/zww1212585867-coder/guwenai.git" "$APP_DIR" || {
-    echo "克隆失败：检查 git 是否安装 / 网络是否通。手动跑：git clone https://github.com/zww1212585867-coder/guwenai.git /opt/cognitive-navigator"
+    echo "克隆失败：检查 git 是否安装 / 网络是否通 / 仓库是否私有"
     exit 1
   }
 fi
 cd "$APP_DIR"
+# 若仓库私有，匿名 git pull 会失败；若有 GITHUB_TOKEN，自动改写 remote 嵌入令牌
+if [ -n "${GITHUB_TOKEN:-}" ]; then
+  CURRENT_REMOTE=$(git remote get-url origin 2>/dev/null || echo "")
+  if echo "$CURRENT_REMOTE" | grep -q "@"; then
+    echo "remote 已带令牌"
+  else
+    NEW_REMOTE=$(echo "$CURRENT_REMOTE" | sed "s|https://|https://x-access-token:${GITHUB_TOKEN}@|")
+    git remote set-url origin "$NEW_REMOTE"
+    echo "已将令牌嵌入 remote，后续 git pull 无需密码"
+  fi
+fi
 git fetch --quiet origin
 git reset --hard "origin/$BRANCH" --quiet
 echo "已拉平到 $(git rev-parse --short HEAD)"
