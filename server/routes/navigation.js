@@ -177,7 +177,7 @@ router.post('/', async (req, res) => {
     // 诊断 / 规划 / 陪跑
     const history = getHistory(conv.id);
     const profile = mode !== 'plan' ? loadProfile(conv.visitor_id, conv.domain) : null;
-    const planMsg = mode === 'plan' ? '请根据已收集的信息给出完整分析包与分析，不再提问。' : null;
+    const planMsg = mode === 'plan' ? '请基于以上对话中导诊阶段整理出的用户真实问题与背景，以顾问身份自然、个性化地回答，不要重新提问。' : null;
     const currentRound = (conv.round_count || 0) + 1; // 本轮是第几轮诊断
 
     const { output, tokenCost } = await runMode(config, {

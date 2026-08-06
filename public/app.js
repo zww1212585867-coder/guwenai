@@ -141,16 +141,39 @@ function renderDiagnose(out) {
   showSubmit(true);
 }
 
-// ---------- 渲染：分析态 ----------
+// ---------- 安全渲染自由文本（转义 HTML，支持 **粗体** 与换行）----------
+function formatAnswer(text) {
+  if (!text) return '';
+  const esc = String(text)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return esc
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+    .replace(/\n/g, '<br>');
+}
+
+// ---------- 渲染：分析态（专家自由回答，非模板报告）----------
 function renderPlan(out) {
   const wrap = el('div');
-  // ★ P2 护城河隐藏：不再向用户暴露「提炼后的问题 / 补全信息 / 复制给大模型的问题包」
-  //   产品定位是用户直接在这里获得顾问级答案，而非帮用户生成 prompt 去别的 AI。
-  //   后端仍内部生成 analysis_package 并交给专家模型作答，只是前端不展示这些内部环节。
+  // ★ v2.5 回答层：渲染自由文本 answer，删除原 steps/risks/gains 三卡模板。
+  //   产品定位是用户直接在这里获得顾问级回答，而非看一份结构化报告。
   const an = out.analysis || {};
-  if (an.steps && an.steps.length) wrap.appendChild(el('div', '', '<b>分析：</b><br>' + an.steps.map(s => '· ' + s).join('<br>')));
-  if (an.risks && an.risks.length) wrap.appendChild(el('div', '', '<b>风险：</b><br>' + an.risks.map(s => '· ' + s).join('<br>')));
-  if (an.gains && an.gains.length) wrap.appendChild(el('div', '', '<b>可能收益：</b><br>' + an.gains.map(s => '· ' + s).join('<br>')));
+  if (an.answer) {
+    const body = el('div', 'answer-body');
+    body.innerHTML = formatAnswer(an.answer);
+    wrap.appendChild(body);
+  } else if (typeof out.analysis === 'string') {
+    // 容错：极少数情况模型直接返回字符串
+    const body = el('div', 'answer-body');
+    body.innerHTML = formatAnswer(out.analysis);
+    wrap.appendChild(body);
+  }
+  // insights：内部提示，仅当模型给出时极轻量展示，不做模块卡片（避免重新结构化）
+  if (Array.isArray(an.insights) && an.insights.length) {
+    const ins = el('div', 'insights');
+    ins.appendChild(el('div', 'insights-h', '顾问补充提醒'));
+    for (const t of an.insights) ins.appendChild(el('div', 'insights-i', '· ' + t));
+    wrap.appendChild(ins);
+  }
   addMsg('ai', wrap);
   // ★ P4：答案展示后给三个出口（方案 C），替代原「开始执行」单按钮
   showPlanActions({ plan: false, execute: true, actionPlan: true, newTopic: true, finish: true });

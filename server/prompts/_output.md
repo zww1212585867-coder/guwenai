@@ -53,21 +53,17 @@ understanding_confirm: {          # 理解确认
 ready_to_plan   true / false（confidence≥70 或 round=2 时为 true 且 questions 为空）
 ```
 
-## 分析态（mode = "plan"，替代旧"规划态/路线图"）
+## 分析态（mode = "plan"，专家交流模式）
 
 ```
-assumptions: [ { question, assumed } ]      被跳过的 assumable 所用假设
-analysis_package: {                          # 给大模型的完整输入包（可复制）
-  user_original        用户原始问题 A
-  reconstructed        提炼后的真正问题 B
-  context              { 已补全的键:值 }      # 导诊收集到的全部信息
-  limitations          已知限制 / 采用的默认假设
-  prompt_for_expert    自包含 Prompt：用户复制即可直接发给大模型
+analysis: {                                  # 专家模型的自由回答（界面只渲染这一块）
+  answer    "自由文本，像真人顾问一样回答（可含自然分段 / 加粗 / 列表，但不用模块标题）"
+  insights  [ "内部提示1", "内部提示2" ]       # 可选，模型自选，仅系统内部使用，绝不展示给用户
 }
-analysis: {                               # 大模型基于分析包产出的文字拆解
-  steps    [ "第一步：...", "第二步：..." ]   # 文字拆解，非项目计划
-  risks    [ "风险1...", "风险2..." ]
-  gains    [ "可能收益1...", "可能收益2..." ]
+analysis_metadata: {                         # 内部 metadata（不展示、不作为回答结构）
+  answer_style         "decision" | "learning" | "choice" | "emotion" | "execute" | 其他
+  confidence           0-1，专家对自己回答质量的自评
+  important_dimensions [ "cashflow", "risk" ]  # 本次涉及的关键维度，用于后续导诊优化
 }
 ```
 
