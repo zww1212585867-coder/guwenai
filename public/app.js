@@ -152,14 +152,16 @@ function renderPlan(out) {
   if (an.risks && an.risks.length) wrap.appendChild(el('div', '', '<b>风险：</b><br>' + an.risks.map(s => '· ' + s).join('<br>')));
   if (an.gains && an.gains.length) wrap.appendChild(el('div', '', '<b>可能收益：</b><br>' + an.gains.map(s => '· ' + s).join('<br>')));
   addMsg('ai', wrap);
-  showPlanActions({ plan: false, execute: true, finish: true });
+  // ★ P4：答案展示后给三个出口（方案 C），替代原「开始执行」单按钮
+  showPlanActions({ plan: false, execute: true, actionPlan: true, newTopic: true, finish: true });
   showSubmit(false);
 }
 
 // ---------- 渲染：陪跑态 ----------
 function renderExecute(out) {
   const wrap = el('div');
-  wrap.appendChild(el('div', 'classification', `卡在第 ${out.step_ref} 步 · 类型：${out.blocker_type}`));
+  if (out.step_ref) wrap.appendChild(el('div', 'classification', `卡在第 ${out.step_ref} 步 · 类型：${out.blocker_type}`));
+  else wrap.appendChild(el('div', 'classification', '根据我们刚才的分析：'));
   wrap.appendChild(el('div', '', out.help || ''));
   if (out.confirm_question) wrap.appendChild(el('div', 'classification', out.confirm_question));
   addMsg('ai', wrap);
@@ -179,11 +181,13 @@ function renderFinish(res) {
   showSubmit(false);
 }
 
-// 控制 plan/execute/finish 三个按钮（不含"提交分析"）
-function showPlanActions({ plan, execute, finish }) {
+// 控制 plan/execute/finish/actionPlan/newTopic 五个按钮（不含"提交分析"）
+function showPlanActions({ plan, execute, finish, actionPlan, newTopic }) {
   $('#planActions').classList.remove('hidden');
   $('#btnPlan').classList.toggle('hidden', !plan);
   $('#btnExecute').classList.toggle('hidden', !execute);
+  $('#btnActionPlan').classList.toggle('hidden', !actionPlan);
+  $('#btnNewTopic').classList.toggle('hidden', !newTopic);
   $('#btnFinish').classList.toggle('hidden', !finish);
 }
 // 控制"提交分析"按钮显隐
@@ -254,11 +258,44 @@ async function doFinish() {
   renderFinish(res);
   $('#planActions').classList.add('hidden');
 }
-function doExecute() {
+async function doExecute(presetMsg) {
+  // ★ P4-②「帮你拆解成行动计划」：直接以预置消息进入 execute 态，复用语义相同的陪跑通道
+  if (presetMsg) {
+    setLoading(true);
+    addMsg('user', el('div', '', presetMsg));
+    const body = { visitor_id: state.visitorId, conversation_id: state.conversationId, message: presetMsg };
+    try {
+      const res = await nav(body);
+      state.mode = 'execute';
+      renderExecute(res.output);
+    } catch (e) {
+      addMsg('ai', el('div', 'err', '⚠️ ' + (e.message || e)));
+      console.error('[navigation]', e);
+    } finally {
+      setLoading(false);
+    }
+    return;
+  }
   state.mode = 'execute';
   showPlanActions({ plan: false, execute: false, finish: true });
   $('#input').focus();
   addMsg('ai', el('div', 'classification', '已进入陪跑模式，告诉我你卡在哪一步。'));
+}
+
+// ★ P4-③「换个新问题」：清空当前会话，重新开始（P5 自动切换机制之前的手动出口）
+function startNewConversation() {
+  state.conversationId = null;
+  state.mode = 'diagnose';
+  state.pendingQuestions = [];
+  state.answers = {};
+  state.confirmMode = false;
+  state.missContext = null;
+  $('#log').innerHTML = '';
+  $('#planActions').classList.add('hidden');
+  $('#feedbackBox').classList.add('hidden');
+  showSubmit(false);
+  addMsg('ai', el('div', '', '好的，我们换个话题。说说你想了解的新问题——我会重新帮你梳理清楚。'));
+  $('#input').focus();
 }
 
 async function sendFeedback(score) {
@@ -284,7 +321,9 @@ async function init() {
   $('#input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
   $('#btnSubmitAnalysis').onclick = send;
   $('#btnPlan').onclick = doPlan;
-  $('#btnExecute').onclick = doExecute;
+  $('#btnExecute').onclick = () => doExecute();
+  $('#btnActionPlan').onclick = () => doExecute('请帮我把上面的分析拆解成具体的、可落地的行动计划步骤。');
+  $('#btnNewTopic').onclick = startNewConversation;
   $('#btnFinish').onclick = doFinish;
   document.querySelectorAll('#stars span').forEach(s => { s.onclick = () => sendFeedback(Number(s.dataset.score)); });
 
