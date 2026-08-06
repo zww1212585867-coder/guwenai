@@ -26,15 +26,17 @@ reflection.possibly_skippable  数组，事后看本可不问的问题
 ```
 round                第几轮（1 或 2，封顶 2）
 max_rounds           2
+problem_type         "决策型" | "执行型" | "理解型" | "评估型" | "情绪处境型"
 confidence           0-100，AI 自评：现在直接交给大模型能否产出优质分析
 confidence_reason    为什么这个分（具体缺了什么）
-questions: [                     # 本轮要问的（≤6），一次性列出，用户提交后整轮处理
+questions: [                     # 数量 = 真实缺口数（可为 1、可为 0），封顶 6；严禁凑数
   {
     key                 稳定英文键，跨轮同含义用同键
     question            问题原文
     criticality         "blocking" | "assumable"
+    derived_from        从用户原话哪一句推出来的（引用片段+一句推导）；推不出就别问这题
     why                 为什么问——必须说明"不知道会导致分析哪部分失真"，要具体
-    options             2-5 个可点选项（建议回复）
+    options             2-5 个可点选项，必须贴合用户具体情境
     default_assumption  assumable 必填；blocking 填 null
   }
 ]

@@ -100,6 +100,7 @@ function renderDiagnose(out) {
   }
   for (const q of state.pendingQuestions) {
     const card = el('div', 'qcard');
+    if (q.derived_from) card.appendChild(el('div', 'derived', '↳ ' + q.derived_from));
     card.appendChild(el('div', 'q-q', q.question || ''));
     if (q.why) card.appendChild(el('div', 'why', '💡 ' + q.why));
     if (q.options && q.options.length) {

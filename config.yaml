@@ -25,7 +25,7 @@ diagnosis:
   task_type_candidates: 30    # 注入 prompt 的历史高频 task_type 数量
 
 prompt:
-  bundleVersion: cos-v1.0     # 一个号覆盖 cos/_output/diagnose/plan/execute 全套
+  bundleVersion: cos-v2.1     # 一个号覆盖 cos/_output/diagnose/plan/execute 全套
   activeVersion: v1
 
 protocol:
