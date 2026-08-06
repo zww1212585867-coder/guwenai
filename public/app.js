@@ -57,11 +57,7 @@ function renderDiagnose(out) {
   wrap.appendChild(el('div', 'classification',
     `领域 <b>${cls.domain || '-'}</b> · ${cls.intent || ''}`));
 
-  const suf = (out.confidence != null ? out.confidence : (out.sufficiency && out.sufficiency.score)) ?? 0;
-  const reason = out.confidence_reason || (out.sufficiency && out.sufficiency.reason) || '';
-  const round = out.round || 1, max = out.max_rounds || 2;
-  wrap.appendChild(el('div', 'suff', `<i style="width:${suf}%"></i>`));
-  wrap.appendChild(el('div', 'classification', `信息充足度 ${suf}/100 — ${reason}（第 ${round}/${max} 轮）`));
+  // ★ 不再渲染 suf 进度条 + 「信息充足度 X/100」行 —— 这是内部指标，仅后端判断 must_plan 用
 
   // 理解确认态
   if (out.problem_reconstruction) {
@@ -218,7 +214,14 @@ async function send() {
     const res = await nav(body);
     state.conversationId = res.conversation_id;
     state.mode = res.mode;
-    if (res.mode === 'diagnose') renderDiagnose(res.output);
+    if (res.mode === 'diagnose') {
+      renderDiagnose(res.output);
+      // ★ 后端说「必须 plan」（第 1 轮 confidence≥70 或第 2 轮结束）→ 自动转入 plan
+      if (res.must_plan) {
+        addMsg('ai', el('div', 'classification', '（信息已收齐，进入分析）'));
+        await doPlan();
+      }
+    }
     else if (res.mode === 'plan') renderPlan(res.output);
     else if (res.mode === 'execute') renderExecute(res.output);
   } catch (e) {

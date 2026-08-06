@@ -146,12 +146,26 @@ router.post('/', async (req, res) => {
       // plan / execute 必须基于已存在会话
     }
 
-    // 落用户消息
-    if (message) {
-      db.prepare('INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?,?,?,?,?)')
-        .run(uid(), conv.id, 'user', message, ts);
+    // 落用户消息：原话 + 本轮回答合并为一条（让下一轮 AI 能看到回答）
+    let userText = '';
+    if (message) userText = message;
+    if (Array.isArray(answers) && answers.length) {
+      const ansText = answers
+        .filter(a => a && a.qkey)
+        .map(a => {
+          if (a.skipped) return `${a.qkey}=（跳过：假设 ${a.assumption || '未知'}）`;
+          return `${a.qkey}=${a.answer || '（未答）'}`;
+        })
+        .join('；');
+      if (ansText) {
+        userText = userText ? `${userText}\n\n【本轮回答】${ansText}` : `【本轮回答】${ansText}`;
+      }
     }
-    // 回填答案（不影响 affected_plan）
+    if (userText) {
+      db.prepare('INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?,?,?,?,?)')
+        .run(uid(), conv.id, 'user', userText, ts);
+    }
+    // 回填答案到 diagnostic_questions（不影响 affected_plan）
     if (Array.isArray(answers) && answers.length) applyAnswers(conv.id, answers);
 
     const mode = decideMode(act, conv);
@@ -224,6 +238,14 @@ router.post('/', async (req, res) => {
       output,
       token_cost: tokenCost,
       ready_to_plan: readyToPlan,
+      // must_plan 自动 plan 的条件（仅诊断态）：
+      //   ① 第 1 轮 confidence ≥ 70 且 AI 同意 ready_to_plan（直接 plan，跳过理解确认）
+      //   ② 已达 max_rounds（兜底：第 2 轮结束必须 plan，即使 confidence 低）
+      // ★ 理解确认态（problem_reconstruction 存在）不强制 plan —— 让用户决定 ✓/✗
+      must_plan: mode === 'diagnose' && !output.problem_reconstruction && (
+        readyToPlan ||
+        ((typeof output.round === 'number' ? output.round : currentRound) >= (typeof output.max_rounds === 'number' ? output.max_rounds : 2))
+      ),
       sufficiency,
       outcome: oc || null,
     });
