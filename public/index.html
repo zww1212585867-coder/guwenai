@@ -48,8 +48,14 @@
   </main>
 
   <footer class="composer">
-    <textarea id="input" rows="2" placeholder="描述你想完成的任务，或卡住的那一步…"></textarea>
-    <button id="btnSend" class="primary">发送</button>
+    <div id="loading" class="loading hidden">
+      <span class="spinner"></span>
+      <span class="loading-text">🧭 顾问正在为您深度分析中，请稍候…</span>
+    </div>
+    <div class="row">
+      <textarea id="input" rows="2" placeholder="描述你想完成的任务，或卡住的那一步…"></textarea>
+      <button id="btnSend" class="primary">发送</button>
+    </div>
   </footer>
 
   <script src="app.js"></script>

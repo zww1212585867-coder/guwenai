@@ -11,6 +11,7 @@ const state = {
   answers: {},              // qkey -> { answer, skipped, assumption }
   confirmMode: false,       // 理解确认"不对"后等待用户解释
   missContext: null,        // 理解确认点✗时暂存"原理解"，发出解释后回传后端
+  loading: false,           // 请求进行中（防重复点击）
 };
 localStorage.setItem('cn_visitor', state.visitorId);
 
@@ -21,6 +22,15 @@ function el(tag, cls, html) {
   return e;
 }
 function scrollDown() { $('.stage').scrollTop = $('.stage').scrollHeight; }
+
+// ---------- 加载态：用户提交后到服务器返回之间显示，缓解等待焦虑 + 防重复点击 ----------
+function setLoading(on) {
+  state.loading = on;
+  $('#btnSend').disabled = on;
+  const sb = $('#btnSubmitAnalysis');
+  if (sb) sb.disabled = on;
+  $('#loading').classList.toggle('hidden', !on);
+}
 
 function addMsg(role, node) {
   const m = el('div', 'msg ' + role);
@@ -63,11 +73,11 @@ function renderDiagnose(out) {
   if (out.problem_reconstruction) {
     const pr = out.problem_reconstruction;
     const card = el('div', 'confirm-card');
-    card.appendChild(el('div', 'confirm-title', '我理解你真正想解决的是：'));
+    card.appendChild(el('div', 'confirm-title', '让我先确认一下我理解对了：'));
     card.appendChild(el('div', 'confirm-b', pr.understood_as || ''));
     if (pr.original) card.appendChild(el('div', 'confirm-sub', `（你原话：${pr.original}）`));
     if (Array.isArray(pr.gpt_needs) && pr.gpt_needs.length)
-      card.appendChild(el('div', 'confirm-needs', '大模型还需要：' + pr.gpt_needs.join('、')));
+      card.appendChild(el('div', 'confirm-needs', '为了更准确帮你，我还想了解：' + pr.gpt_needs.join('、')));
     const opts = el('div', 'options');
     const yes = el('span', 'opt', '✓ 对，就是这个');
     yes.onclick = () => { state.confirmMode = false; doPlan({ confirmed: true, original: pr.understood_as }); };
@@ -134,17 +144,9 @@ function renderDiagnose(out) {
 // ---------- 渲染：分析态 ----------
 function renderPlan(out) {
   const wrap = el('div');
-  const pkg = out.analysis_package || {};
-  if (pkg.reconstructed) wrap.appendChild(el('div', 'classification', `提炼后的问题：<b>${pkg.reconstructed}</b>`));
-  if (pkg.context && Object.keys(pkg.context).length) {
-    const ctx = Object.entries(pkg.context).map(([k, v]) => `${k}: ${v}`).join('，');
-    wrap.appendChild(el('div', 'classification', '补全信息：' + ctx));
-  }
-  if (pkg.prompt_for_expert) {
-    const cp = el('div', 'copy-handoff', '📋 复制给大模型的问题包');
-    cp.onclick = () => { navigator.clipboard.writeText(pkg.prompt_for_expert); cp.textContent = '✓ 已复制'; };
-    wrap.appendChild(cp);
-  }
+  // ★ P2 护城河隐藏：不再向用户暴露「提炼后的问题 / 补全信息 / 复制给大模型的问题包」
+  //   产品定位是用户直接在这里获得顾问级答案，而非帮用户生成 prompt 去别的 AI。
+  //   后端仍内部生成 analysis_package 并交给专家模型作答，只是前端不展示这些内部环节。
   const an = out.analysis || {};
   if (an.steps && an.steps.length) wrap.appendChild(el('div', '', '<b>分析：</b><br>' + an.steps.map(s => '· ' + s).join('<br>')));
   if (an.risks && an.risks.length) wrap.appendChild(el('div', '', '<b>风险：</b><br>' + an.risks.map(s => '· ' + s).join('<br>')));
@@ -159,11 +161,6 @@ function renderExecute(out) {
   const wrap = el('div');
   wrap.appendChild(el('div', 'classification', `卡在第 ${out.step_ref} 步 · 类型：${out.blocker_type}`));
   wrap.appendChild(el('div', '', out.help || ''));
-  if (out.expert_handoff) {
-    const cp = el('div', 'copy-handoff', '📋 复制给专家 AI 的 Prompt');
-    cp.onclick = () => { navigator.clipboard.writeText(out.expert_handoff.prompt); cp.textContent = '✓ 已复制'; };
-    wrap.appendChild(cp);
-  }
   if (out.confirm_question) wrap.appendChild(el('div', 'classification', out.confirm_question));
   addMsg('ai', wrap);
   showPlanActions({ plan: false, execute: false, finish: true });
@@ -196,6 +193,7 @@ function showSubmit(on) {
 
 // ---------- 交互 ----------
 async function send() {
+  if (state.loading) return; // 防重复点击：请求进行中直接忽略
   const text = $('#input').value.trim();
   if (!text && Object.keys(state.answers).length === 0) return;
   if (state.confirmMode && !text) return; // 理解确认"不对"后必须输入解释
@@ -203,6 +201,7 @@ async function send() {
   addMsg('user', el('div', '', text || '（已回答本轮问题）'));
   $('#input').value = '';
   $('#input').placeholder = '描述你想完成的任务，或卡住的那一步…';
+  setLoading(true); // ★ 进入加载态：按钮禁用 + 显示转圈 + 提示语
 
   const answersArr = Object.entries(state.answers).map(([qkey, v]) => ({ qkey, ...v }));
   const body = { visitor_id: state.visitorId, conversation_id: state.conversationId, message: text, answers: answersArr };
@@ -228,15 +227,26 @@ async function send() {
     const err = el('div', 'err', '⚠️ ' + (e.message || e));
     addMsg('ai', err);
     console.error('[navigation]', e);
+  } finally {
+    setLoading(false); // ★ 无论成功失败，结束加载态
   }
 }
 
 async function doPlan(confirmResult) {
+  setLoading(true); // ★ plan 也是一次请求，期间同样显示加载态
   const body = { visitor_id: state.visitorId, conversation_id: state.conversationId, action: 'plan' };
   if (confirmResult) body.confirm_result = { confirmed: confirmResult.confirmed, original_understanding: confirmResult.original };
-  const res = await nav(body);
-  state.mode = 'plan';
-  renderPlan(res.output);
+  try {
+    const res = await nav(body);
+    state.mode = 'plan';
+    renderPlan(res.output);
+  } catch (e) {
+    const err = el('div', 'err', '⚠️ ' + (e.message || e));
+    addMsg('ai', err);
+    console.error('[navigation]', e);
+  } finally {
+    setLoading(false);
+  }
 }
 async function doFinish() {
   const res = await nav({ visitor_id: state.visitorId, conversation_id: state.conversationId, action: 'finish' });
