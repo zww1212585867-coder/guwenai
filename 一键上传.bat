@@ -1,6 +1,6 @@
 @echo off
 echo 正在把本地最新代码推送到 GitHub...
-cd /d "D:\付\WB工作\WB工作结果\自建AI系统\cognitive-navigator"
+cd /d "D:\付\交易日志\仓库\交易日志\个人知识库\WB工作\WB工作结果\自建AI系统\cognitive-navigator"
 
 :: 收集所有改动
 git add .

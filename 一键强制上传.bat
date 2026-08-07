@@ -1,6 +1,6 @@
 @echo off
 echo 正在把本地最新代码强制覆盖到 GitHub...
-cd /d "D:\付\WB工作\WB工作结果\自建AI系统\cognitive-navigator"
+cd /d "D:\付\交易日志\仓库\交易日志\个人知识库\WB工作\WB工作结果\自建AI系统\cognitive-navigator"
 
 :: 收集所有被 WB 修改过的新文件
 git add .
