@@ -107,3 +107,13 @@ button { font: inherit; cursor: pointer; border: none; border-radius: 10px; padd
 button.primary { background: var(--brand); color: #fff; }
 button.primary:disabled { opacity: .55; cursor: not-allowed; }
 button.ghost { background: #fff; color: var(--muted); border: 1px solid var(--line); }
+
+/* 首页导航（GEO 公开信息层） */
+.home-nav { display: flex; gap: 14px; flex-wrap: wrap; }
+.home-nav a { font-size: 13px; color: var(--muted); text-decoration: none; }
+.home-nav a:hover { color: var(--brand); }
+.home-tagline { font-size: 13px; color: var(--brand); margin: 0 0 6px; font-weight: 600; }
+@media (max-width: 600px) {
+  .topbar { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .home-nav { gap: 10px; }
+}

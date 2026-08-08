@@ -7,6 +7,7 @@ const feedbackRouter = require('./routes/feedback');
 const domainsRouter = require('./routes/domains');
 const adminRouter = require('./routes/admin');
 const protocolRouter = require('./routes/protocol');
+const pagesRouter = require('./routes/pages');
 
 const app = express();
 app.use(express.json());
@@ -18,6 +19,9 @@ app.use('/api/feedback', feedbackRouter);
 app.use('/api/domains', domainsRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/protocol', protocolRouter);
+
+// 公开信息层（GEO 基础架构）：服务端直出静态 HTML 页 + sitemap/robots
+app.use('/', pagesRouter);
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
